@@ -8,10 +8,19 @@ from app.config import settings
 
 router = APIRouter()
 
+LANG_NAMES = {
+    "hi-IN": "Hindi",
+    "te-IN": "Telugu",
+    "ta-IN": "Tamil",
+    "kn-IN": "Kannada",
+    "en-US": "English",
+}
+
 
 class AgentAssistRequest(BaseModel):
     recent_transcript: str
     patient_context: str
+    response_language: str = "en-US"
 
 
 class AgentAssistResponse(BaseModel):
@@ -22,6 +31,8 @@ class AgentAssistResponse(BaseModel):
 ASSIST_PROMPT = """You are a patient's medical memory assistant listening to a live doctor-patient conversation.
 
 When the doctor asks about the patient's medical history, medications, past symptoms, test results, allergies, or any information in the patient's records — provide a brief, accurate answer from their memory.
+
+IMPORTANT: Respond in {language_name}. The patient speaks {language_name}, so your answer MUST be in {language_name} so they can directly relay it to the doctor.
 
 ONLY respond when:
 1. The doctor clearly asked a question about patient history/records
@@ -41,7 +52,7 @@ Recent conversation (translated to English):
 {transcript}
 
 Return ONLY valid JSON (no markdown):
-{{"should_respond": true, "response": "brief helpful answer"}}
+{{"should_respond": true, "response": "brief helpful answer in {language_name}"}}
 or
 {{"should_respond": false, "response": ""}}
 """
@@ -55,9 +66,12 @@ async def agent_assist(req: AgentAssistRequest) -> AgentAssistResponse:
     if not req.recent_transcript.strip():
         return AgentAssistResponse(should_respond=False, response="")
 
+    language_name = LANG_NAMES.get(req.response_language, "English")
+
     prompt = ASSIST_PROMPT.format(
         context=req.patient_context,
         transcript=req.recent_transcript,
+        language_name=language_name,
     )
 
     client = genai.Client(api_key=settings.google_api_key)

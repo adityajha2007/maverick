@@ -133,7 +133,6 @@ export default function Records() {
             description="Log symptoms, observations, or daily notes. Track progress between clinical visits."
             selected={mode === "happenings"}
             onPress={() => setMode("happenings")}
-            badge="Selected"
           />
 
           <RecordOptionCard
@@ -152,8 +151,8 @@ export default function Records() {
         <View className="flex-1">
           <Text className="text-sm font-semibold text-clinical-fg">On-Device Privacy</Text>
           <Text className="mt-0.5 text-xs text-clinical-muted">
-            Gemma processes data locally on your device. No medical data leaves your phone
-            unless you explicitly share it.
+            Your medical data is processed securely. Recordings are analyzed with Gemini AI
+            to extract and save clinical information.
           </Text>
         </View>
       </View>

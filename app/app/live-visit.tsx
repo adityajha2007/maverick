@@ -5,9 +5,10 @@ import {
   useAudioStream,
   requestRecordingPermissionsAsync,
 } from "expo-audio";
+import { CameraView, useCameraPermissions } from "expo-camera";
 
 import { openDb } from "../src/services/store/db";
-import { getAllFacts, saveVisitTranscript, saveMedication, saveReminder } from "../src/services/store/repos";
+import { getAllFacts, saveVisitTranscript, saveMedication, saveNote, saveReminder } from "../src/services/store/repos";
 import { factsToCompactJson } from "../src/services/chat/buildContext";
 import { BACKEND_URL } from "../src/config";
 import { LiveSession } from "../src/services/live/LiveSession";
@@ -61,14 +62,22 @@ export default function LiveVisit() {
   const [savedMeds, setSavedMeds] = useState<string[]>([]);
   const [encounterId, setEncounterId] = useState<number | null>(null);
   const [agentVoice, setAgentVoice] = useState(true);
+  const [agentStatus, setAgentStatus] = useState<"idle" | "listening" | "thinking" | "responded">("idle");
   const [saving, setSaving] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState<"prescription" | "xray" | null>(null);
+  const [capturing, setCapturing] = useState(false);
+  const [capturedRxMeds, setCapturedRxMeds] = useState<MedMention[]>([]);
+  const [capturedXrayAnalysis, setCapturedXrayAnalysis] = useState<string | null>(null);
+  const [permission, requestPermission] = useCameraPermissions();
 
   const sessionRef = useRef<LiveSession | null>(null);
   const scrollRef = useRef<ScrollView>(null);
+  const cameraRef = useRef<CameraView>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const rawAccum = useRef("");
   const transAccum = useRef("");
   const agentDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const agentIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastAgentTranscript = useRef("");
 
   const { stream, isStreaming } = useAudioStream({
@@ -91,6 +100,7 @@ export default function LiveVisit() {
       if (isStreaming) stream.stop();
       if (timerRef.current) clearInterval(timerRef.current);
       if (agentDebounceRef.current) clearTimeout(agentDebounceRef.current);
+      if (agentIntervalRef.current) clearInterval(agentIntervalRef.current);
     };
   }, []);
 
@@ -109,12 +119,13 @@ export default function LiveVisit() {
   );
 
   async function checkAgentAssist() {
-    if (!patientContext || !transAccum.current) return;
-    const currentTranscript = transAccum.current;
-    if (currentTranscript === lastAgentTranscript.current) return;
-    lastAgentTranscript.current = currentTranscript;
+    const transcript = transAccum.current || rawAccum.current;
+    if (!patientContext || !transcript) return;
+    if (transcript === lastAgentTranscript.current) return;
+    lastAgentTranscript.current = transcript;
 
-    const recentText = currentTranscript.split(" ").slice(-80).join(" ");
+    setAgentStatus("thinking");
+    const recentText = transcript.split(" ").slice(-80).join(" ");
 
     try {
       const resp = await fetch(`${BACKEND_URL}/agent-assist`, {
@@ -123,17 +134,24 @@ export default function LiveVisit() {
         body: JSON.stringify({
           recent_transcript: recentText,
           patient_context: patientContext,
+          response_language: sourceLang,
         }),
       });
-      if (!resp.ok) return;
+      if (!resp.ok) { setAgentStatus("listening"); return; }
       const data = await resp.json();
       if (data.should_respond && data.response) {
         addEntry("agent", data.response);
+        setAgentStatus("responded");
         if (agentVoice && Speech?.speak) {
-          Speech.speak(data.response, { language: "en", rate: 0.9 });
+          Speech.speak(data.response, { language: sourceLang.split("-")[0], rate: 0.9 });
         }
+        setTimeout(() => setAgentStatus("listening"), 3000);
+      } else {
+        setAgentStatus("listening");
       }
-    } catch {}
+    } catch {
+      setAgentStatus("listening");
+    }
   }
 
   function scheduleAgentCheck() {
@@ -166,7 +184,7 @@ export default function LiveVisit() {
 
       session.onChunk((chunk) => {
         addEntry(chunk.kind as TranscriptEntry["kind"], chunk.text);
-        if (chunk.kind === "translated") {
+        if (chunk.kind === "translated" || chunk.kind === "raw") {
           scheduleAgentCheck();
         }
       });
@@ -174,12 +192,17 @@ export default function LiveVisit() {
       await stream.start();
 
       setState("live");
+      setAgentStatus("listening");
       addEntry("raw", "Session started — listening...");
 
       setElapsed(0);
       timerRef.current = setInterval(() => {
         setElapsed((e) => e + 1);
       }, 1000);
+
+      agentIntervalRef.current = setInterval(() => {
+        scheduleAgentCheck();
+      }, 8000);
     } catch (e: any) {
       setState("idle");
       Alert.alert("Connection failed", e.message ?? "Could not connect to backend.");
@@ -195,6 +218,11 @@ export default function LiveVisit() {
       clearTimeout(agentDebounceRef.current);
       agentDebounceRef.current = null;
     }
+    if (agentIntervalRef.current) {
+      clearInterval(agentIntervalRef.current);
+      agentIntervalRef.current = null;
+    }
+    setAgentStatus("idle");
 
     stream.stop();
     sessionRef.current?.close();
@@ -302,6 +330,14 @@ export default function LiveVisit() {
           });
         }
       }
+
+      if (capturedXrayAnalysis && encounterId) {
+        await saveNote(db, PATIENT_ID, `X-ray/MRI analysis (visit #${encounterId}): ${capturedXrayAnalysis}`);
+        db.executeSync(
+          "UPDATE encounters SET summary = summary || ? WHERE id = ?",
+          [` | Scan: ${capturedXrayAnalysis.slice(0, 100)}`, encounterId]
+        );
+      }
     } catch (e: any) {
       console.warn("saveVisit error:", e);
     }
@@ -318,6 +354,48 @@ export default function LiveVisit() {
 
   function toggleItem(index: number) {
     setCheckedItems((prev) => ({ ...prev, [index]: !prev[index] }));
+  }
+
+  async function captureDocument() {
+    if (!cameraRef.current || capturing) return;
+    if (!permission?.granted) {
+      await requestPermission();
+      if (!permission?.granted) return;
+    }
+    setCapturing(true);
+    try {
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.7, base64: true });
+      if (!photo?.base64) { setCapturing(false); return; }
+
+      if (cameraOpen === "prescription") {
+        const resp = await fetch(`${BACKEND_URL}/parse-prescription`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ image_base64: photo.base64 }),
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data.medications?.length > 0) {
+            setCapturedRxMeds((prev) => [...prev, ...data.medications]);
+            const names = data.medications.map((m: any) => `${m.drug} ${m.dose || ""}`);
+            setSavedMeds((prev) => [...prev, ...names]);
+            setMedicationData((prev) => [...prev, ...data.medications]);
+          }
+        }
+      } else {
+        const resp = await fetch(`${BACKEND_URL}/analyze-image`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ image_base64: photo.base64, prompt: "Analyze this X-ray or MRI scan. Describe findings relevant to the patient." }),
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          setCapturedXrayAnalysis(data.analysis || "Scan captured");
+        }
+      }
+    } catch {}
+    setCapturing(false);
+    setCameraOpen(null);
   }
 
   function kindIcon(kind: string) {
@@ -411,6 +489,40 @@ export default function LiveVisit() {
           <View className="h-3 w-3 rounded-full bg-clinical-error" />
           <Text className="flex-1 text-sm font-semibold text-clinical-fg">Recording & streaming audio...</Text>
           <Text className="text-xs text-clinical-muted">16kHz PCM</Text>
+        </View>
+      )}
+
+      {/* Agent Status Banner */}
+      {state === "live" && (
+        <View className={`mx-4 mt-2 flex-row items-center gap-2 rounded-xl border-2 px-4 py-2.5 ${
+          agentStatus === "thinking"
+            ? "border-green-400 bg-green-100"
+            : agentStatus === "responded"
+              ? "border-green-500 bg-green-50"
+              : "border-green-300 bg-green-50"
+        }`}>
+          <Text className="text-base">{agentStatus === "thinking" ? "\u{1f4ad}" : "\u{1f9e0}"}</Text>
+          <View className="flex-1">
+            <Text className="text-xs font-bold text-green-700">
+              {agentStatus === "thinking"
+                ? "Memory Agent analyzing conversation..."
+                : agentStatus === "responded"
+                  ? "Memory Agent responded"
+                  : "Memory Agent active"}
+            </Text>
+            <Text className="text-[10px] text-green-600">
+              {agentStatus === "thinking"
+                ? "Checking patient records for relevant info"
+                : "Monitoring conversation \u{00b7} Will surface info from patient memory"}
+            </Text>
+          </View>
+          {agentStatus === "thinking" && (
+            <View className="flex-row gap-1">
+              <View className="h-2 w-2 rounded-full bg-green-400" />
+              <View className="h-2 w-2 rounded-full bg-green-300" />
+              <View className="h-2 w-2 rounded-full bg-green-200" />
+            </View>
+          )}
         </View>
       )}
 
@@ -591,34 +703,72 @@ export default function LiveVisit() {
             </View>
           )}
 
-          {/* Capture Medical Documents */}
-          <View className="mt-4 rounded-xl border border-clinical-outline-var bg-clinical-card px-4 py-3">
-            <Text className="mb-3 text-[10px] font-bold uppercase tracking-widest text-clinical-muted">
-              CAPTURE DOCUMENTS
-            </Text>
-            <Pressable
-              onPress={() => router.push("/camera-capture?mode=prescription")}
-              className="mb-2 flex-row items-center gap-3 rounded-lg border border-clinical-primary/20 bg-clinical-primary/5 p-3"
-            >
-              <Text className="text-lg">{"\u{1f4cb}"}</Text>
-              <View className="flex-1">
-                <Text className="text-sm font-bold text-clinical-primary">Capture Prescription</Text>
-                <Text className="text-[10px] text-clinical-muted">Photo of prescription to parse medications</Text>
+          {/* Captured X-ray/MRI Result */}
+          {capturedXrayAnalysis && (
+            <View className="mt-4 rounded-xl border border-clinical-secondary/20 bg-clinical-secondary/5 px-4 py-3">
+              <Text className="mb-1 text-[10px] font-bold uppercase tracking-widest text-clinical-secondary">
+                X-RAY / MRI ANALYSIS
+              </Text>
+              <Text className="text-sm text-clinical-fg">{capturedXrayAnalysis}</Text>
+            </View>
+          )}
+
+          {/* Inline Camera */}
+          {cameraOpen && (
+            <View className="mt-4 rounded-xl border-2 border-clinical-primary/30 bg-clinical-card overflow-hidden">
+              <View className="flex-row items-center justify-between bg-clinical-primary/5 px-4 py-2">
+                <Text className="text-xs font-bold text-clinical-primary">
+                  {cameraOpen === "prescription" ? "Capture Prescription" : "Capture X-ray / MRI"}
+                </Text>
+                <Pressable onPress={() => setCameraOpen(null)}>
+                  <Text className="text-sm font-bold text-clinical-muted">{"✕"}</Text>
+                </Pressable>
               </View>
-              <Text className="text-clinical-muted">{">"}</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => router.push("/camera-capture?mode=pain")}
-              className="flex-row items-center gap-3 rounded-lg border border-clinical-secondary/20 bg-clinical-secondary/5 p-3"
-            >
-              <Text className="text-lg">{"\u{1fa7b}"}</Text>
-              <View className="flex-1">
-                <Text className="text-sm font-bold text-clinical-secondary">Capture X-ray / MRI</Text>
-                <Text className="text-[10px] text-clinical-muted">Upload scan results for AI analysis</Text>
+              <View style={{ height: 250 }}>
+                <CameraView ref={cameraRef} style={{ flex: 1 }} facing="back" />
               </View>
-              <Text className="text-clinical-muted">{">"}</Text>
-            </Pressable>
-          </View>
+              <Pressable
+                onPress={captureDocument}
+                disabled={capturing}
+                className={`items-center py-3 ${capturing ? "bg-clinical-surface-mid" : "bg-clinical-primary"}`}
+              >
+                <Text className={`text-sm font-bold ${capturing ? "text-clinical-muted" : "text-white"}`}>
+                  {capturing ? "Analyzing..." : "Capture & Analyze"}
+                </Text>
+              </Pressable>
+            </View>
+          )}
+
+          {/* Capture Buttons */}
+          {!cameraOpen && (
+            <View className="mt-4 rounded-xl border border-clinical-outline-var bg-clinical-card px-4 py-3">
+              <Text className="mb-3 text-[10px] font-bold uppercase tracking-widest text-clinical-muted">
+                CAPTURE DOCUMENTS
+              </Text>
+              <View className="flex-row gap-2">
+                <Pressable
+                  onPress={() => { if (!permission?.granted) requestPermission(); setCameraOpen("prescription"); }}
+                  className="flex-1 items-center gap-1 rounded-lg border border-clinical-primary/20 bg-clinical-primary/5 p-3"
+                >
+                  <Text className="text-lg">{"\u{1f4cb}"}</Text>
+                  <Text className="text-xs font-bold text-clinical-primary">Prescription</Text>
+                  {capturedRxMeds.length > 0 && (
+                    <Text className="text-[10px] text-clinical-secondary">{capturedRxMeds.length} captured</Text>
+                  )}
+                </Pressable>
+                <Pressable
+                  onPress={() => { if (!permission?.granted) requestPermission(); setCameraOpen("xray"); }}
+                  className="flex-1 items-center gap-1 rounded-lg border border-clinical-secondary/20 bg-clinical-secondary/5 p-3"
+                >
+                  <Text className="text-lg">{"\u{1fa7b}"}</Text>
+                  <Text className="text-xs font-bold text-clinical-secondary">X-ray / MRI</Text>
+                  {capturedXrayAnalysis && (
+                    <Text className="text-[10px] text-clinical-secondary">Captured</Text>
+                  )}
+                </Pressable>
+              </View>
+            </View>
+          )}
 
           {/* Save & Finish */}
           <Pressable
@@ -678,6 +828,9 @@ export default function LiveVisit() {
                 setMedicationData([]);
                 setDoctorName("");
                 setEncounterId(null);
+                setCameraOpen(null);
+                setCapturedRxMeds([]);
+                setCapturedXrayAnalysis(null);
                 setState("idle");
                 setElapsed(0);
               }}

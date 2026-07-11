@@ -142,7 +142,7 @@ export default function Profile() {
         <SettingRow icon="🔔" title="Notifications" subtitle="Medication reminders, agent alerts" />
         <SettingRow icon="🔒" title="Privacy" subtitle="Data sharing, on-device processing" />
         <SettingRow icon="📤" title="Export Data" subtitle="Download medical records" />
-        <SettingRow icon="🤖" title="AI Preferences" subtitle="Gemma model, processing settings" />
+        <SettingRow icon="🤖" title="AI Preferences" subtitle="Gemini AI, processing settings" />
       </View>
 
       {/* Version */}
