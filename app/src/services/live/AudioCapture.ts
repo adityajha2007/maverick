@@ -4,20 +4,15 @@ export class AudioCapture {
 
   async start(onChunk: (base64: string) => void): Promise<void> {
     try {
-      const { Audio } = require("expo-av");
-      const { granted } = await Audio.requestPermissionsAsync();
-      if (!granted) {
+      const ExpoAudio = require("expo-audio");
+      const perm = await ExpoAudio.requestRecordingPermissionsAsync();
+      if (!perm.granted) {
         this.available = false;
         return;
       }
 
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      });
-
-      const recording = new Audio.Recording();
-      await recording.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+      const recording = new ExpoAudio.Recording();
+      await recording.prepareToRecordAsync();
       await recording.startAsync();
       this.recording = recording;
     } catch {
