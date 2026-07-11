@@ -139,12 +139,13 @@ export async function saveMedication(
     frequency: string;
     timing?: string;
     duration?: string;
+    encounterId?: number;
   }
 ): Promise<number> {
   const today = new Date().toISOString().slice(0, 10);
   db.executeSync(
-    "INSERT INTO medications (patient_id, name, dose, frequency, timing, start_date, end_date) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    [data.patientId, data.name, data.dose, data.frequency, data.timing ?? null, today, data.duration ?? null]
+    "INSERT INTO medications (patient_id, name, dose, frequency, timing, start_date, end_date, prescribed_at_encounter_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+    [data.patientId, data.name, data.dose, data.frequency, data.timing ?? null, today, data.duration ?? null, data.encounterId ?? null]
   );
   const row = db.executeSync("SELECT last_insert_rowid() as id").rows?.[0] as any;
   return row?.id ?? 0;

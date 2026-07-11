@@ -327,16 +327,26 @@ export default function LiveVisit() {
             dose: med.dose || "as prescribed",
             frequency: med.frequency || "",
             timing: med.timing,
+            encounterId: encounterId ?? undefined,
           });
         }
       }
 
-      if (capturedXrayAnalysis && encounterId) {
-        await saveNote(db, PATIENT_ID, `X-ray/MRI analysis (visit #${encounterId}): ${capturedXrayAnalysis}`);
-        db.executeSync(
-          "UPDATE encounters SET summary = summary || ? WHERE id = ?",
-          [` | Scan: ${capturedXrayAnalysis.slice(0, 100)}`, encounterId]
-        );
+      if (encounterId) {
+        const parts: string[] = [];
+        if (capturedRxMeds.length > 0) {
+          parts.push(`Prescription captured: ${capturedRxMeds.map((m) => m.drug).join(", ")}`);
+        }
+        if (capturedXrayAnalysis) {
+          await saveNote(db, PATIENT_ID, `X-ray/MRI analysis (visit #${encounterId}): ${capturedXrayAnalysis}`);
+          parts.push(`Scan: ${capturedXrayAnalysis.slice(0, 100)}`);
+        }
+        if (parts.length > 0) {
+          db.executeSync(
+            "UPDATE encounters SET summary = COALESCE(summary, '') || ? WHERE id = ?",
+            [` | ${parts.join(" | ")}`, encounterId]
+          );
+        }
       }
     } catch (e: any) {
       console.warn("saveVisit error:", e);
