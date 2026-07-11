@@ -1,0 +1,17 @@
+{
+  "expo": {
+    "name": "healthOS",
+    "slug": "healthos",
+    "scheme": "healthos",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "assetBundlePatterns": ["**/*"],
+    "android": {
+      "package": "com.healthos.app",
+      "adaptiveIcon": { "backgroundColor": "#ffffff" }
+    },
+    "plugins": ["expo-router"],
+    "experiments": { "typedRoutes": true }
+  }
+}

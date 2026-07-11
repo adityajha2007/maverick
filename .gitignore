@@ -216,3 +216,17 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Node
+node_modules/
+
+# Android build
+android/.gradle/
+android/app/build/
+*.apk
+
+# Expo
+.expo/
+
+# CLAUDE
+.claude/

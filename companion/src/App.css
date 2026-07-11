@@ -1,0 +1,116 @@
+:root {
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  background: #eee;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+}
+
+.phone {
+  width: 390px;
+  height: 844px;
+  background: #fff;
+  border-radius: 32px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.header {
+  padding: 14px 16px;
+  border-bottom: 1px solid #eee;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.patient-name { font-weight: 600; font-size: 15px; }
+.patient-meta { font-size: 11px; color: #666; margin-top: 2px; }
+.status { font-size: 11px; color: #0a84ff; font-weight: 500; }
+.status.recording { color: #ff3b30; }
+
+.video {
+  flex: 1;
+  background: #000;
+  position: relative;
+  min-height: 0;
+}
+.video video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.video .no-camera {
+  color: #666;
+  font-size: 13px;
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  padding: 20px;
+}
+
+.transcript {
+  height: 180px;
+  overflow-y: auto;
+  padding: 10px 14px;
+  font-size: 13px;
+  line-height: 1.45;
+  background: #fafafa;
+  border-top: 1px solid #eee;
+}
+.transcript .placeholder { color: #999; font-size: 12px; text-align: center; padding-top: 10px; }
+.transcript .turn { margin-bottom: 6px; }
+.transcript .turn.user { color: #333; }
+.transcript .turn.agent { color: #0a2540; }
+.transcript .role { font-weight: 600; margin-right: 6px; }
+
+.footer {
+  padding: 14px;
+  display: flex;
+  justify-content: center;
+  border-top: 1px solid #eee;
+}
+.mic {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: none;
+  background: #0a84ff;
+  color: #fff;
+  font-size: 26px;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+.mic:disabled { opacity: 0.5; cursor: not-allowed; }
+.mic.recording {
+  background: #ff3b30;
+  animation: pulse 1.2s infinite;
+}
+@keyframes pulse {
+  50% { transform: scale(1.08); }
+}
+
+.disclaimer {
+  font-size: 10px;
+  color: #999;
+  text-align: center;
+  padding: 6px 14px 10px;
+}
+
+.error {
+  color: #ff3b30;
+  font-size: 11px;
+  padding: 4px 14px;
+  text-align: center;
+  background: #ffecec;
+}

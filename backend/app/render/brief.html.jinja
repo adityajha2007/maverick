@@ -1,0 +1,81 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Doctor Brief — {{ patient.name }}</title>
+<style>
+  :root { --fg:#111; --muted:#555; --line:#e5e5e5; --up:#c0392b; --down:#27ae60; --flat:#7f8c8d; }
+  html, body { margin:0; padding:0; font-family: ui-sans-serif, system-ui, sans-serif; color:var(--fg); }
+  body { max-width: 960px; margin: 0 auto; padding: 24px; }
+  h1 { font-size: 20px; margin: 0 0 4px 0; }
+  .sub { color:var(--muted); font-size: 13px; }
+  .card { border:1px solid var(--line); border-radius:8px; padding:14px 16px; margin: 14px 0; }
+  .card h2 { font-size: 14px; margin: 0 0 8px 0; text-transform: uppercase; letter-spacing:.05em; color:var(--muted); }
+  .row { display:flex; gap:12px; flex-wrap:wrap; }
+  .pill { border:1px solid var(--line); border-radius:999px; padding:4px 10px; font-size:13px; }
+  .lab { min-width: 140px; }
+  .lab .val { font-weight: 600; font-size: 16px; }
+  .up { color: var(--up); } .down { color: var(--down); } .flat { color: var(--flat); }
+  ol.qs { margin: 0; padding-left: 20px; } ol.qs li { margin: 6px 0; }
+  ul.enc { margin: 0; padding-left: 20px; }
+  @media print { body { padding: 0; } .card { break-inside: avoid; } }
+</style>
+</head>
+<body>
+  <h1>{{ patient.name }} — {{ patient.age }}, {{ patient.sex }}</h1>
+  <div class="sub">Shared moments ago · Expires 24h</div>
+
+  <div class="card">
+    <h2>Active conditions</h2>
+    <div class="row">
+      {% for c in conditions %}<span class="pill">{{ c.name }} ({{ c.diagnosed_at[:4] }})</span>{% endfor %}
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Current regimen at a glance</h2>
+    <ul>
+      {% for m in medications if m.active %}
+        <li><b>{{ m.name }}</b> {{ m.dose }}{% if m.frequency %} — {{ m.frequency }}{% endif %}{% if m.timing %}, {{ m.timing }}{% endif %}{% if m.with_food %} · with food{% endif %}</li>
+      {% endfor %}
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>Recent labs (last 90 days)</h2>
+    <div class="row">
+      {% for l in recent_labs %}
+        <div class="lab">
+          <div>{{ l.test_name }}</div>
+          <div class="val">
+            {{ l.value }} {{ l.unit }}
+            <span class="{{ l.trend or 'flat' }}">
+              {% if l.trend == 'up' %}↑{% elif l.trend == 'down' %}↓{% else %}→{% endif %}
+            </span>
+          </div>
+          <div class="sub">{{ l.taken_at }}</div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Follow-up tests due</h2>
+    {% if follow_ups %}
+      <ul>{% for f in follow_ups %}<li><b>{{ f.test }}</b> — {{ f.reason }} (due {{ f.due_date }})</li>{% endfor %}</ul>
+    {% else %}
+      <div class="sub">Nothing due in the next 4 weeks.</div>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h2>3 things to ask</h2>
+    <ol class="qs">{% for q in watch_list %}<li>{{ q }}</li>{% endfor %}</ol>
+  </div>
+
+  <div class="card">
+    <h2>Recent encounters</h2>
+    <ul class="enc">{% for e in encounters %}<li><b>{{ e.date }}</b>{% if e.provider %} · {{ e.provider }}{% endif %}{% if e.summary %} — {{ e.summary }}{% endif %}</li>{% endfor %}</ul>
+  </div>
+</body>
+</html>
