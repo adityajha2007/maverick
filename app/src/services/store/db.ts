@@ -30,8 +30,14 @@ export async function openDb(): Promise<DB> {
     date TEXT NOT NULL,
     kind TEXT NOT NULL,
     summary TEXT,
-    provider TEXT
+    provider TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
   )`);
+
+  try {
+    _db.executeSync("ALTER TABLE encounters ADD COLUMN created_at TEXT");
+    _db.executeSync("UPDATE encounters SET created_at = date || ' 00:00:00' WHERE created_at IS NULL");
+  } catch {}
 
   _db.executeSync(`CREATE TABLE IF NOT EXISTS medications (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -99,6 +105,23 @@ export async function openDb(): Promise<DB> {
     target_lang TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`);
+
+  _db.executeSync(`CREATE TABLE IF NOT EXISTS reminders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    patient_id INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT,
+    kind TEXT NOT NULL DEFAULT 'action',
+    priority TEXT NOT NULL DEFAULT 'normal',
+    due_date TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    encounter_id INTEGER,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
+
+  try {
+    _db.executeSync("ALTER TABLE reminders ADD COLUMN encounter_id INTEGER");
+  } catch {}
 
   seed(_db);
 

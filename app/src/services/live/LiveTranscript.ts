@@ -2,7 +2,7 @@ let _nextId = 1;
 
 export interface TranscriptEntry {
   id: number;
-  kind: "raw" | "translated" | "alert";
+  kind: "raw" | "translated" | "alert" | "agent";
   text: string;
   ts: number;
 }

@@ -1,111 +1,104 @@
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from google import genai
-from google.genai import types as gen_types
-import asyncio
 import json
+
+from fastapi import APIRouter, HTTPException
+from google import genai
+from pydantic import BaseModel
 
 from app.config import settings
 
 router = APIRouter()
 
 
-def _camera_system_instruction(patient_context: str | None) -> str:
-    base = (
-        "You are a medical visit assistant with camera access. "
-        "You can see prescriptions, medication bottles, and documents the doctor or patient holds up. "
-        "When you see a prescription or medication label, extract: drug name, dosage, frequency, and duration. "
-        "Output each extraction as a JSON line: "
-        '{"kind":"rx","drug":"...","dose":"...","frequency":"...","duration":"..."}. '
-        "When you hear the patient or doctor speak, note any hesitation, confusion, or emotional distress "
-        "and flag it: "
-        '{"kind":"tone","observation":"..."}. '
-        "For normal conversation, output nothing — only act on visual or tonal signals."
-    )
-
-    if patient_context:
-        base += (
-            "\n\nYou also have the patient's medical context. "
-            "Cross-reference any new prescription against current medications. "
-            "If you detect a potential drug interaction, emit: "
-            '{"kind":"alert","text":"<concise warning>"}.\n\n'
-            f"Patient context:\n{patient_context}"
-        )
-
-    return base
+class ImageRequest(BaseModel):
+    image_base64: str
 
 
-@router.websocket("/live-camera-ws")
-async def live_camera_ws(client: WebSocket) -> None:
-    await client.accept()
-    try:
-        cfg = await client.receive_json()
-    except Exception:
-        await client.close(code=1002, reason="config expected as first message")
-        return
+class ParsedMedication(BaseModel):
+    drug: str
+    dose: str
+    frequency: str
+    duration: str | None = None
+    timing: str | None = None
 
-    patient_context = cfg.get("patientContext")
 
+class PrescriptionResponse(BaseModel):
+    medications: list[ParsedMedication]
+    provider: str | None = None
+    date: str | None = None
+    notes: str | None = None
+
+
+PARSE_PROMPT = """Analyze this medical prescription or medication image.
+Extract ALL medications with their details.
+
+Return ONLY valid JSON in this exact format:
+{
+  "medications": [
+    {"drug": "...", "dose": "...", "frequency": "...", "duration": "...", "timing": "morning/evening/etc"}
+  ],
+  "provider": "doctor name if visible",
+  "date": "YYYY-MM-DD if visible",
+  "notes": "any other relevant medical notes"
+}
+
+If this is not a prescription/medication image, return:
+{"medications": [], "notes": "Description of what was seen in the image"}
+"""
+
+
+@router.post("/parse-prescription", response_model=PrescriptionResponse)
+async def parse_prescription(req: ImageRequest) -> PrescriptionResponse:
     if not settings.google_api_key:
-        await client.send_json({"kind": "error", "text": "GOOGLE_API_KEY not set."})
-        await client.close()
-        return
+        raise HTTPException(status_code=500, detail="GOOGLE_API_KEY not set")
 
-    system = _camera_system_instruction(patient_context)
-
-    genai_client = genai.Client(api_key=settings.google_api_key)
-    live_cfg = gen_types.LiveConnectConfig(
-        response_modalities=[gen_types.Modality.TEXT],
-        system_instruction=system,
-        input_audio_transcription=gen_types.AudioTranscriptionConfig(),
+    client = genai.Client(api_key=settings.google_api_key)
+    response = client.models.generate_content(
+        model="gemini-3.5-flash",
+        contents=[
+            {
+                "parts": [
+                    {"text": PARSE_PROMPT},
+                    {"inline_data": {"mime_type": "image/jpeg", "data": req.image_base64}},
+                ]
+            }
+        ],
     )
 
+    raw = response.text.strip()
+    if raw.startswith("```"):
+        raw = raw.split("\n", 1)[1] if "\n" in raw else raw[3:]
+        raw = raw.rsplit("```", 1)[0]
+    raw = raw.strip()
+
     try:
-        async with genai_client.aio.live.connect(
-            model="gemini-3.1-flash-live-preview",
-            config=live_cfg,
-        ) as session:
-            async def input_pump() -> None:
-                try:
-                    while True:
-                        msg = await client.receive()
-                        if "bytes" in msg and msg["bytes"]:
-                            data = msg["bytes"]
-                            if len(data) > 10_000:
-                                await session.send_realtime_input(
-                                    media=gen_types.Blob(data=data, mime_type="image/jpeg")
-                                )
-                            else:
-                                await session.send_realtime_input(
-                                    audio=gen_types.Blob(data=data, mime_type="audio/pcm;rate=16000")
-                                )
-                        elif "text" in msg and msg["text"]:
-                            pass
-                except WebSocketDisconnect:
-                    pass
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=502, detail=f"Gemini returned non-JSON: {raw[:200]}")
 
-            async def output_pump() -> None:
-                async for response in session.receive():
-                    text = getattr(response, "text", None)
-                    if not text:
-                        continue
-                    text = text.strip()
-                    if not text:
-                        continue
-                    if text.startswith("{"):
-                        try:
-                            parsed = json.loads(text)
-                            kind = parsed.get("kind", "info")
-                            await client.send_json(parsed)
-                            continue
-                        except (json.JSONDecodeError, KeyError):
-                            pass
-                    await client.send_json({"kind": "info", "text": text})
+    return PrescriptionResponse(**data)
 
-            await asyncio.gather(input_pump(), output_pump())
-    except Exception as e:
-        await client.send_json({"kind": "error", "text": str(e)})
-    finally:
-        try:
-            await client.close()
-        except Exception:
-            pass
+
+class AnalyzeRequest(BaseModel):
+    image_base64: str
+    prompt: str = "Describe what you see in this medical image. If it shows a body part with pain or injury, describe the location, visible symptoms, and severity."
+
+
+@router.post("/analyze-image")
+async def analyze_image(req: AnalyzeRequest) -> dict:
+    if not settings.google_api_key:
+        raise HTTPException(status_code=500, detail="GOOGLE_API_KEY not set")
+
+    client = genai.Client(api_key=settings.google_api_key)
+    response = client.models.generate_content(
+        model="gemini-3.5-flash",
+        contents=[
+            {
+                "parts": [
+                    {"text": req.prompt},
+                    {"inline_data": {"mime_type": "image/jpeg", "data": req.image_base64}},
+                ]
+            }
+        ],
+    )
+
+    return {"analysis": response.text.strip()}

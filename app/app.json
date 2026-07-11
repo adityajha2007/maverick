@@ -17,7 +17,13 @@
     },
     "plugins": [
       "expo-router",
-      "expo-audio"
+      "expo-audio",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "healthOS needs camera access to capture prescriptions and pain points."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

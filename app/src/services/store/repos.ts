@@ -28,13 +28,14 @@ export async function getAllFacts(db: DB, patientId: number): Promise<AllFacts> 
   }));
 
   const encounters: Encounter[] = (
-    db.executeSync("SELECT * FROM encounters WHERE patient_id = ? ORDER BY date DESC", [patientId]).rows ?? []
+    db.executeSync("SELECT * FROM encounters WHERE patient_id = ? ORDER BY COALESCE(created_at, date) DESC, id DESC", [patientId]).rows ?? []
   ).map((r: any) => ({
     id: r.id,
     date: r.date,
     kind: r.kind,
     summary: r.summary,
     provider: r.provider,
+    createdAt: r.created_at ?? r.date,
   }));
 
   const medications: Medication[] = (
@@ -127,4 +128,103 @@ export async function getOpenDeferrals(db: DB, patientId: number): Promise<Defer
 
 export async function resolveDeferral(db: DB, deferralId: number, answer: string): Promise<void> {
   db.executeSync("UPDATE deferrals SET answer = ?, resolved_at = datetime('now') WHERE id = ?", [answer, deferralId]);
+}
+
+export async function saveMedication(
+  db: DB,
+  data: {
+    patientId: number;
+    name: string;
+    dose: string;
+    frequency: string;
+    timing?: string;
+    duration?: string;
+  }
+): Promise<number> {
+  const today = new Date().toISOString().slice(0, 10);
+  db.executeSync(
+    "INSERT INTO medications (patient_id, name, dose, frequency, timing, start_date, end_date) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    [data.patientId, data.name, data.dose, data.frequency, data.timing ?? null, today, data.duration ?? null]
+  );
+  const row = db.executeSync("SELECT last_insert_rowid() as id").rows?.[0] as any;
+  return row?.id ?? 0;
+}
+
+export async function saveNote(db: DB, patientId: number, text: string): Promise<void> {
+  db.executeSync("INSERT INTO notes (patient_id, text) VALUES (?, ?)", [patientId, text]);
+}
+
+export interface Reminder {
+  id: number;
+  title: string;
+  description: string | null;
+  kind: string;
+  priority: string;
+  dueDate: string | null;
+  status: string;
+  createdAt: string;
+}
+
+export async function saveReminder(
+  db: DB,
+  data: {
+    patientId: number;
+    title: string;
+    description?: string;
+    kind?: string;
+    priority?: string;
+    dueDate?: string;
+    encounterId?: number;
+    status?: string;
+  }
+): Promise<number> {
+  db.executeSync(
+    "INSERT INTO reminders (patient_id, title, description, kind, priority, due_date, encounter_id, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+    [data.patientId, data.title, data.description ?? null, data.kind ?? "action", data.priority ?? "normal", data.dueDate ?? null, data.encounterId ?? null, data.status ?? "pending"]
+  );
+  const row = db.executeSync("SELECT last_insert_rowid() as id").rows?.[0] as any;
+  return row?.id ?? 0;
+}
+
+export async function getReminders(db: DB, patientId: number): Promise<Reminder[]> {
+  const rows = db.executeSync(
+    "SELECT * FROM reminders WHERE patient_id = ? AND status = 'pending' ORDER BY priority DESC, created_at DESC",
+    [patientId]
+  ).rows ?? [];
+  return rows.map((r: any) => ({
+    id: r.id,
+    title: r.title,
+    description: r.description,
+    kind: r.kind,
+    priority: r.priority,
+    dueDate: r.due_date,
+    status: r.status,
+    createdAt: r.created_at,
+  }));
+}
+
+export async function completeReminder(db: DB, reminderId: number): Promise<void> {
+  db.executeSync("UPDATE reminders SET status = 'done' WHERE id = ?", [reminderId]);
+}
+
+export async function getEncounterActionItems(db: DB, patientId: number): Promise<(Reminder & { encounterId: number })[]> {
+  try {
+    const rows = db.executeSync(
+      "SELECT * FROM reminders WHERE patient_id = ? AND encounter_id IS NOT NULL ORDER BY created_at DESC",
+      [patientId]
+    ).rows ?? [];
+    return rows.map((r: any) => ({
+      id: r.id,
+      title: r.title,
+      description: r.description,
+      kind: r.kind,
+      priority: r.priority,
+      dueDate: r.due_date,
+      status: r.status,
+      createdAt: r.created_at,
+      encounterId: r.encounter_id,
+    }));
+  } catch {
+    return [];
+  }
 }

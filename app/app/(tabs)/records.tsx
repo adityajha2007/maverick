@@ -1,5 +1,5 @@
-import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useRouter, useFocusEffect } from "expo-router";
+import { useCallback, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 
 import type { AllFacts } from "../../src/types";
@@ -60,13 +60,15 @@ export default function Records() {
   const [mode, setMode] = useState<RecordMode | null>(null);
   const router = useRouter();
 
-  useEffect(() => {
-    (async () => {
-      const db = await openDb();
-      const f = await getAllFacts(db, PATIENT_ID);
-      setFacts(f);
-    })();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      (async () => {
+        const db = await openDb();
+        const f = await getAllFacts(db, PATIENT_ID);
+        setFacts(f);
+      })();
+    }, [])
+  );
 
   if (!facts) {
     return (
@@ -136,8 +138,8 @@ export default function Records() {
 
           <RecordOptionCard
             icon="📷"
-            title="Capture with Gemma"
-            description="Use your camera to capture pain points. Gemma analyzes on-device for privacy."
+            title="Capture"
+            description="Use your camera to capture prescriptions or pain points for AI analysis."
             selected={mode === "camera"}
             onPress={() => setMode("camera")}
           />
@@ -162,6 +164,10 @@ export default function Records() {
           onPress={() => {
             if (mode === "conversation") {
               router.push("/live-visit");
+            } else if (mode === "camera") {
+              router.push("/camera-capture");
+            } else if (mode === "happenings") {
+              router.push("/record-happenings");
             }
           }}
           className={`items-center rounded-xl py-4 ${

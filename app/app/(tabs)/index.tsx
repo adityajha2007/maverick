@@ -1,5 +1,5 @@
-import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useRouter, useFocusEffect } from "expo-router";
+import { useCallback, useState } from "react";
 import { Dimensions, Image, Pressable, ScrollView, Text, View } from "react-native";
 
 import type { AllFacts, Flag } from "../../src/types";
@@ -15,17 +15,19 @@ export default function Home() {
   const [flags, setFlags] = useState<Flag[]>([]);
   const router = useRouter();
 
-  useEffect(() => {
-    (async () => {
-      const db = await openDb();
-      const [f, fl] = await Promise.all([
-        getAllFacts(db, PATIENT_ID),
-        getOpenFlags(db, PATIENT_ID),
-      ]);
-      setFacts(f);
-      setFlags(fl);
-    })();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      (async () => {
+        const db = await openDb();
+        const [f, fl] = await Promise.all([
+          getAllFacts(db, PATIENT_ID),
+          getOpenFlags(db, PATIENT_ID),
+        ]);
+        setFacts(f);
+        setFlags(fl);
+      })();
+    }, [])
+  );
 
   if (!facts) {
     return (

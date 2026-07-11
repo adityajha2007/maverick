@@ -54,7 +54,7 @@ async def live_ws(client: WebSocket) -> None:
 
     genai_client = genai.Client(api_key=settings.google_api_key)
     live_cfg = gen_types.LiveConnectConfig(
-        response_modalities=[gen_types.Modality.TEXT],
+        response_modalities=["TEXT"],
         system_instruction=system,
         input_audio_transcription=gen_types.AudioTranscriptionConfig(),
     )
@@ -67,10 +67,11 @@ async def live_ws(client: WebSocket) -> None:
             async def audio_pump() -> None:
                 try:
                     while True:
-                        chunk = await client.receive_bytes()
-                        await session.send_realtime_input(
-                            audio=gen_types.Blob(data=chunk, mime_type="audio/pcm;rate=16000")
-                        )
+                        msg = await client.receive()
+                        if "bytes" in msg and msg["bytes"]:
+                            await session.send_realtime_input(
+                                audio=gen_types.Blob(data=msg["bytes"], mime_type="audio/pcm;rate=16000")
+                            )
                 except WebSocketDisconnect:
                     pass
 
@@ -94,7 +95,10 @@ async def live_ws(client: WebSocket) -> None:
 
             await asyncio.gather(audio_pump(), text_pump())
     except Exception as e:
-        await client.send_json({"kind": "error", "text": str(e)})
+        try:
+            await client.send_json({"kind": "error", "text": str(e)})
+        except Exception:
+            pass
     finally:
         try:
             await client.close()

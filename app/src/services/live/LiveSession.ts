@@ -7,7 +7,7 @@ interface ConnectOpts {
 }
 
 interface Chunk {
-  kind: "raw" | "translated" | "alert";
+  kind: "raw" | "translated" | "alert" | "error";
   text: string;
 }
 
@@ -20,7 +20,7 @@ export class LiveSession {
     ws.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data);
-        if (this._onChunk && (msg.kind === "raw" || msg.kind === "translated" || msg.kind === "alert")) {
+        if (this._onChunk && msg.kind && msg.text) {
           this._onChunk({ kind: msg.kind, text: msg.text });
         }
       } catch {}
@@ -31,6 +31,7 @@ export class LiveSession {
     return new Promise((resolve, reject) => {
       const wsUrl = BACKEND_URL.replace(/^http/, "ws") + "/live-ws";
       const ws = new WebSocket(wsUrl);
+      ws.binaryType = "arraybuffer";
       ws.onopen = () => {
         ws.send(JSON.stringify(opts));
         resolve(new LiveSession(ws));
@@ -43,9 +44,9 @@ export class LiveSession {
     this._onChunk = cb;
   }
 
-  sendAudioBase64(base64: string) {
+  sendAudio(pcmData: ArrayBuffer) {
     if (this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({ kind: "audio", data: base64 }));
+      this.ws.send(pcmData);
     }
   }
 

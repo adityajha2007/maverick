@@ -9,6 +9,8 @@ from app.routes import chat as chat_router
 from app.routes import brief as brief_router
 from app.routes import live as live_router
 from app.routes import live_camera as live_camera_router
+from app.routes import visit_analysis as visit_analysis_router
+from app.routes import agent_assist as agent_assist_router
 
 app = FastAPI(title="healthOS backend", version="0.1.0")
 
@@ -28,6 +30,8 @@ app.include_router(chat_router.router)
 app.include_router(brief_router.router)
 app.include_router(live_router.router)
 app.include_router(live_camera_router.router)
+app.include_router(visit_analysis_router.router)
+app.include_router(agent_assist_router.router)
 
 
 @app.get("/health")

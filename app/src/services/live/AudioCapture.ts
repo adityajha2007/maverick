@@ -1,20 +1,23 @@
 export class AudioCapture {
-  private recording: any = null;
+  private recorder: any = null;
   available = true;
 
   async start(onChunk: (base64: string) => void): Promise<void> {
     try {
-      const ExpoAudio = require("expo-audio");
-      const perm = await ExpoAudio.requestRecordingPermissionsAsync();
-      if (!perm.granted) {
+      const { requestRecordingPermissionsAsync, RecordingPresets, AudioModule } =
+        require("expo-audio");
+
+      const { granted } = await requestRecordingPermissionsAsync();
+      if (!granted) {
         this.available = false;
         return;
       }
 
-      const recording = new ExpoAudio.Recording();
-      await recording.prepareToRecordAsync();
-      await recording.startAsync();
-      this.recording = recording;
+      const options = RecordingPresets.HIGH_QUALITY;
+      const recorder = new AudioModule.AudioRecorder(options);
+      await recorder.prepareToRecordAsync(options);
+      recorder.record();
+      this.recorder = recorder;
     } catch {
       this.available = false;
     }
@@ -22,9 +25,9 @@ export class AudioCapture {
 
   async stop(): Promise<void> {
     try {
-      if (this.recording) {
-        await this.recording.stopAndUnloadAsync();
-        this.recording = null;
+      if (this.recorder) {
+        await this.recorder.stop();
+        this.recorder = null;
       }
     } catch {}
   }

@@ -18,6 +18,7 @@ export interface Encounter {
   kind: string;
   summary?: string;
   provider?: string;
+  createdAt?: string;
 }
 
 export interface Medication {
