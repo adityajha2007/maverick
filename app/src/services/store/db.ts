@@ -138,42 +138,30 @@ function seed(db: DB) {
     "INSERT OR IGNORE INTO patients (id, name, dob, sex) VALUES (1, 'Arjun Mehta', '1988-03-14', 'Male')"
   );
 
-  db.executeSync(
-    "INSERT INTO conditions (patient_id, name, status, diagnosed_at) VALUES (1, 'Lumbar Compression', 'active', '2023-06-15')"
-  );
-  db.executeSync(
-    "INSERT INTO conditions (patient_id, name, status, diagnosed_at) VALUES (1, 'Shoulder Inflammation', 'active', '2023-09-20')"
-  );
+  db.executeSync("INSERT INTO conditions (patient_id, name, status, diagnosed_at) VALUES (1, 'Lumbar Disc Herniation (L4-L5)', 'active', '2025-11-20')");
+  db.executeSync("INSERT INTO conditions (patient_id, name, status, diagnosed_at) VALUES (1, 'Chronic Lower Back Pain', 'active', '2025-08-10')");
+  db.executeSync("INSERT INTO conditions (patient_id, name, status, diagnosed_at) VALUES (1, 'Mild Hypertension', 'active', '2026-01-15')");
 
-  db.executeSync(
-    "INSERT INTO encounters (patient_id, date, kind, summary, provider) VALUES (1, '2023-10-12', 'Follow-up', 'Orthopedic follow-up regarding lumbar compression. Prescribed physical therapy exercises and light anti-inflammatory regime.', 'Dr. Sarah Jenkins')"
-  );
-  db.executeSync(
-    "INSERT INTO encounters (patient_id, date, kind, summary, provider) VALUES (1, '2023-07-22', 'Annual Physical', 'Routine physical exam. All vitals within normal range.', 'Dr. Marcus Thorne')"
-  );
+  db.executeSync("INSERT INTO encounters (patient_id, date, kind, summary, provider, created_at) VALUES (1, '2026-06-15', 'Follow-up', 'Follow-up for lumbar disc herniation. Doctor reviewed recent MRI showing mild improvement. Advised to continue physiotherapy 3x/week and avoid heavy lifting. Discussed switching from Ibuprofen to Naproxen due to gastric irritation.', 'Dr. Priya Sharma', '2026-06-15 10:30:00')");
+  db.executeSync("INSERT INTO encounters (patient_id, date, kind, summary, provider, created_at) VALUES (1, '2026-05-01', 'Specialist Referral', 'Referred to orthopedic specialist for lumbar disc assessment. Initial MRI ordered. Patient reported radiating pain in left leg (sciatica).', 'Dr. Rajesh Kapoor', '2026-05-01 14:00:00')");
+  db.executeSync("INSERT INTO encounters (patient_id, date, kind, summary, provider, created_at) VALUES (1, '2026-03-10', 'Annual Physical', 'Routine checkup. BP slightly elevated at 140/90. Started on Amlodipine 5mg. All blood work within normal limits except mildly elevated CRP.', 'Dr. Meena Gupta', '2026-03-10 09:00:00')");
 
-  db.executeSync(
-    "INSERT INTO medications (patient_id, name, dose, frequency, timing, start_date, prescribed_at_encounter_id) VALUES (1, 'Ibuprofen', '400mg', 'Twice daily', 'morning and evening', '2023-10-12', 1)"
-  );
-  db.executeSync(
-    "INSERT INTO medications (patient_id, name, dose, frequency, timing, start_date, prescribed_at_encounter_id) VALUES (1, 'Meloxicam', '15mg', 'Once daily', 'morning', '2023-10-12', 1)"
-  );
+  db.executeSync("INSERT INTO medications (patient_id, name, dose, frequency, timing, start_date, prescribed_at_encounter_id) VALUES (1, 'Naproxen', '500mg', 'Twice daily', 'morning and evening with food', '2026-06-15', 1)");
+  db.executeSync("INSERT INTO medications (patient_id, name, dose, frequency, timing, start_date, end_date, prescribed_at_encounter_id) VALUES (1, 'Ibuprofen', '400mg', 'Twice daily', 'morning and evening', '2025-11-20', '2026-06-15', 1)");
+  db.executeSync("INSERT INTO medications (patient_id, name, dose, frequency, timing, start_date, prescribed_at_encounter_id) VALUES (1, 'Amlodipine', '5mg', 'Once daily', 'morning', '2026-03-10', 3)");
+  db.executeSync("INSERT INTO medications (patient_id, name, dose, frequency, timing, start_date, prescribed_at_encounter_id) VALUES (1, 'Pregabalin', '75mg', 'Twice daily', 'morning and night', '2026-05-01', 2)");
 
-  db.executeSync(
-    "INSERT INTO lab_results (patient_id, test_name, value, unit, taken_at) VALUES (1, 'HbA1c', 5.6, '%', '2023-10-12T10:30:00')"
-  );
-  db.executeSync(
-    "INSERT INTO lab_results (patient_id, test_name, value, unit, taken_at) VALUES (1, 'CRP', 2.1, 'mg/L', '2023-10-12T10:30:00')"
-  );
+  db.executeSync("INSERT INTO lab_results (patient_id, test_name, value, unit, taken_at) VALUES (1, 'HbA1c', 5.4, '%', '2026-03-10T09:30:00')");
+  db.executeSync("INSERT INTO lab_results (patient_id, test_name, value, unit, taken_at) VALUES (1, 'CRP', 3.8, 'mg/L', '2026-03-10T09:30:00')");
+  db.executeSync("INSERT INTO lab_results (patient_id, test_name, value, unit, taken_at) VALUES (1, 'Vitamin D', 18, 'ng/mL', '2026-03-10T09:30:00')");
+  db.executeSync("INSERT INTO lab_results (patient_id, test_name, value, unit, taken_at) VALUES (1, 'ESR', 22, 'mm/hr', '2026-06-15T10:00:00')");
 
-  db.executeSync(
-    "INSERT INTO wearable (patient_id, date, resting_hr, steps) VALUES (1, '2023-10-25', 72, 8432)"
-  );
+  db.executeSync("INSERT INTO wearable (patient_id, date, resting_hr, steps) VALUES (1, '2026-07-11', 68, 6240)");
 
-  db.executeSync(
-    "INSERT INTO flags (patient_id, subject, reasoning, confidence, agent, status) VALUES (1, 'Dizziness Reported', 'Patient logged dizziness episodes post-medication. May indicate adverse reaction to Ibuprofen.', 'grounded', 'symptom-monitor', 'open')"
-  );
-  db.executeSync(
-    "INSERT INTO flags (patient_id, subject, reasoning, confidence, agent, status) VALUES (1, 'Inflammation Resolving', 'CRP trending downward. Shoulder inflammation appears to be responding to treatment.', 'grounded', 'lab-trend', 'open')"
-  );
+  db.executeSync("INSERT INTO notes (patient_id, text, created_at) VALUES (1, 'Symptoms: Pain, Stiffness | Severity: Moderate | Lower back pain worse after sitting for long periods. Left leg numbness comes and goes.', '2026-07-08 20:15:00')");
+  db.executeSync("INSERT INTO notes (patient_id, text, created_at) VALUES (1, 'Symptoms: Dizziness | Severity: Mild | Felt lightheaded after morning medication. Resolved after 30 minutes.', '2026-07-05 08:45:00')");
+
+  db.executeSync("INSERT INTO flags (patient_id, subject, reasoning, confidence, agent, status) VALUES (1, 'Low Vitamin D — Risk for Bone Health', 'Vitamin D at 18 ng/mL (deficient). Combined with lumbar disc herniation, low vitamin D may impair bone healing and increase fracture risk. Supplementation recommended.', 'grounded', 'lab-trend', 'open')");
+  db.executeSync("INSERT INTO flags (patient_id, subject, reasoning, confidence, agent, status) VALUES (1, 'Elevated CRP — Ongoing Inflammation', 'CRP at 3.8 mg/L suggests persistent inflammation, consistent with active disc herniation. Monitor trend at next visit.', 'grounded', 'lab-trend', 'open')");
+  db.executeSync("INSERT INTO flags (patient_id, subject, reasoning, confidence, agent, status) VALUES (1, 'Dizziness After Medication', 'Patient logged dizziness episodes post-medication. May indicate adverse reaction to Amlodipine or Pregabalin interaction. Discuss with prescribing physician.', 'uncertain', 'symptom-monitor', 'open')");
 }

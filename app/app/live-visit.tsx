@@ -143,9 +143,17 @@ export default function LiveVisit() {
         addEntry("agent", data.response);
         setAgentStatus("responded");
         if (agentVoice && Speech?.speak) {
-          Speech.speak(data.response, { language: sourceLang.split("-")[0], rate: 0.9 });
+          stream.stop();
+          Speech.speak(data.response, {
+            language: sourceLang.split("-")[0],
+            rate: 0.9,
+            onDone: () => { stream.start(); setAgentStatus("listening"); },
+            onStopped: () => { stream.start(); setAgentStatus("listening"); },
+            onError: () => { stream.start(); setAgentStatus("listening"); },
+          });
+        } else {
+          setTimeout(() => setAgentStatus("listening"), 3000);
         }
-        setTimeout(() => setAgentStatus("listening"), 3000);
       } else {
         setAgentStatus("listening");
       }
@@ -278,15 +286,6 @@ export default function LiveVisit() {
         items.forEach((_: ActionItem, i: number) => { checked[i] = true; });
         setCheckedItems(checked);
 
-        if (analysis.medications_mentioned?.length > 0) {
-          setMedicationData(analysis.medications_mentioned);
-          const names: string[] = [];
-          for (const med of analysis.medications_mentioned) {
-            if (med.drug) names.push(`${med.drug} ${med.dose || ""}`);
-          }
-          setSavedMeds(names);
-        }
-
         setState("review");
       } else {
         addEntry("alert", "Could not analyze visit. You can still review and save.");
@@ -335,7 +334,16 @@ export default function LiveVisit() {
       if (encounterId) {
         const parts: string[] = [];
         if (capturedRxMeds.length > 0) {
-          parts.push(`Prescription captured: ${capturedRxMeds.map((m) => m.drug).join(", ")}`);
+          parts.push(`Prescription: ${capturedRxMeds.map((m) => m.drug).join(", ")}`);
+          await saveReminder(db, {
+            patientId: PATIENT_ID,
+            title: "Prescription Captured",
+            description: capturedRxMeds.map((m) => `${m.drug} ${m.dose || ""}`).join(", "),
+            kind: "medication",
+            priority: "normal",
+            encounterId,
+            status: "pending",
+          });
         }
         if (capturedXrayAnalysis) {
           await saveNote(db, PATIENT_ID, `X-ray/MRI analysis (visit #${encounterId}): ${capturedXrayAnalysis}`);
@@ -400,7 +408,16 @@ export default function LiveVisit() {
         });
         if (resp.ok) {
           const data = await resp.json();
-          setCapturedXrayAnalysis(data.analysis || "Scan captured");
+          const analysis = data.analysis || "Scan captured";
+          setCapturedXrayAnalysis(analysis);
+          const newItem: ActionItem = {
+            title: "X-ray / MRI Scan Captured",
+            description: analysis.slice(0, 200),
+            kind: "xray",
+            priority: "normal",
+          };
+          setActionItems((prev) => [...prev, newItem]);
+          setCheckedItems((prev) => ({ ...prev, [Object.keys(prev).length]: true }));
         }
       }
     } catch {}
@@ -698,16 +715,21 @@ export default function LiveVisit() {
             </View>
           )}
 
-          {/* Medications */}
-          {savedMeds.length > 0 && (
+          {/* Medications from Prescription Capture */}
+          {capturedRxMeds.length > 0 && (
             <View className="mt-4 rounded-xl border border-clinical-secondary/20 bg-clinical-secondary/5 px-4 py-3">
               <Text className="mb-2 text-[10px] font-bold uppercase tracking-widest text-clinical-secondary">
-                PRESCRIBED MEDICATIONS
+                PRESCRIPTION CAPTURED
               </Text>
-              {savedMeds.map((med, i) => (
+              {capturedRxMeds.map((med, i) => (
                 <View key={i} className="mb-1 flex-row items-center gap-2">
                   <Text className="text-sm">{"\u{1f48a}"}</Text>
-                  <Text className="text-sm font-semibold text-clinical-fg">{med}</Text>
+                  <Text className="text-sm font-semibold text-clinical-fg">
+                    {med.drug} {med.dose || ""}
+                  </Text>
+                  {med.frequency ? (
+                    <Text className="text-xs text-clinical-muted">{med.frequency}</Text>
+                  ) : null}
                 </View>
               ))}
             </View>
