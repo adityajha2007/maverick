@@ -6,12 +6,23 @@
     "version": "0.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "android": {
       "package": "com.healthos.app",
-      "adaptiveIcon": { "backgroundColor": "#ffffff" }
+      "adaptiveIcon": {
+        "backgroundColor": "#ffffff"
+      }
     },
-    "plugins": ["expo-router"],
-    "experiments": { "typedRoutes": true }
+    "plugins": [
+      "expo-router"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "ios": {
+      "bundleIdentifier": "com.healthos.app"
+    }
   }
 }
